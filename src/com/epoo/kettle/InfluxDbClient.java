@@ -5,10 +5,12 @@ import org.influxdb.InfluxDBFactory;
 import org.influxdb.dto.Point;
 import org.influxdb.dto.Query;
 import org.influxdb.dto.QueryResult;
-import org.influxdb.dto.QueryResult.Result;
-import org.influxdb.dto.QueryResult.Series;
 
-import java.text.MessageFormat;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -61,36 +63,25 @@ public class InfluxDbClient {
         // Query your data using InfluxQL.
         // https://docs.influxdata.com/influxdb/v1.7/query_language/data_exploration/#the-basic-select-statement
 
-        Date oneHourAgo = new Date(System.currentTimeMillis() - 60 * 60 * 1000);
-        Date now = new Date();
+        LocalDateTime localDateTime = LocalDateTime.now().minusHours(1);
+        LocalDateTime lastHourStart = LocalDateTime.of(localDateTime.toLocalDate(), LocalTime.of(localDateTime.getHour(), 0));
+        LocalDateTime lastHourEnd = LocalDateTime.of(localDateTime.toLocalDate(), LocalTime.of(localDateTime.getHour(), 59, 59, 999));
+        Date startTime = Date.from(lastHourStart.atZone(ZoneId.systemDefault()).toInstant());
+        Date endTime = Date.from(lastHourEnd.atZone(ZoneId.systemDefault()).toInstant());
         String influxSql = "SELECT time, back_f, back_f_total, back_t, enterprise_code, heat_source_code, heat_source_id, " +
                 "heat_source_name, supply_f, supply_f_total, supply_h, supply_h_total, supply_t " +
-                "FROM heat_source where time >= " + oneHourAgo.getTime() + "ms AND time <= " + now.getTime() + "ms "
+                "FROM heat_source where time >= " + startTime.getTime() + "ms AND time <= " + endTime.getTime() + "ms "
                 + "order by time desc ";
-        QueryResult queryResult = influxDB.query(new Query(influxSql));
-
-        System.out.println(queryResult);
-//        List<Result> results = queryResult.getResults();
-        if (queryResult.getResults() != null) {
-            int size = queryResult.getResults().size();
-            for (int i = 0; i < size; i++) {
-                Result result = queryResult.getResults().get(i);
-                if (result.getSeries() != null) {
-                    int serialSize = result.getSeries().size();
-                    for (int j = 0; j < serialSize; j++) {
-                        Series serial = result.getSeries().get(j);
-                        String serialName = serial.getName();
-                        System.out.println("serialName: " + serialName);
-                        System.out.println("serialColumns： " + serial.getColumns());
-                        int size2 = serial.getValues().size();
-                        for (int k = 0; k < size2; k++) {
-                            System.out.println("columnValues: " + serial.getValues().get(k));
-                        }
-                    }
-                }
-            }
+        List<List<Object>> columnValues = getColumnValues(influxSql);
+        System.out.println(columnValues.size());
+        for (List<Object> values : columnValues) {
+            String time = (String) values.get(0);
+            Double back_f = (Double) values.get(1);
+            Double back_f_total = (Double) values.get(2);
+            Double back_t = (Double) values.get(3);
+            String enterprise_code = (String) values.get(4);
+            System.out.println("values: " + values);
         }
-
         // It will print something like:
         // QueryResult [results=[Result [series=[Series [name=h2o_feet, tags=null,
         //      columns=[time, level description, location, water_level],
@@ -98,6 +89,31 @@ public class InfluxDbClient {
         //         [2020-03-22T20:50:12.929Z, below 3 feet, santa_monica, 2.064],
         //         [2020-03-22T20:50:12.929Z, between 6 and 9 feet, coyote_creek, 8.12]
         //      ]]], error=null]], error=null]
+
+
+    }
+
+    public List<List<Object>> getColumnValues(String sql) {
+        List<List<Object>> columnValues = new ArrayList<List<Object>>();
+        QueryResult queryResult = influxDB.query(new Query(sql));
+
+        System.out.println(queryResult);
+        List<QueryResult.Result> results = queryResult.getResults();
+        if (results != null) {
+            for (QueryResult.Result result : results) {
+                List<QueryResult.Series> series = result.getSeries();
+                if (series != null) {
+                    for (QueryResult.Series serial : series) {
+                        System.out.println("serialColumns： " + serial.getColumns());
+                        List<List<Object>> serialValues = serial.getValues();
+                        columnValues.addAll(serialValues);
+                    }
+                }
+            }
+        }
+        Instant.parse("2007-12-03T10:15:30.00Z");
+
+        return columnValues;
     }
 
     public static void main(String[] args) throws InterruptedException {
