@@ -6,6 +6,8 @@ import org.influxdb.dto.Point;
 import org.influxdb.dto.Query;
 import org.influxdb.dto.QueryResult;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -13,17 +15,47 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 public class InfluxDbClient {
 
     private InfluxDB influxDB;
 
+    private String url;
+    private String username;
+    private String password;
+
+    public static void main(String[] args) throws Exception {
+        InfluxDbClient influxDbClient = new InfluxDbClient();
+        influxDbClient.getConfig();
+        influxDbClient.init();
+
+//        influxDbClient.write();
+        influxDbClient.read();
+
+        influxDbClient.close();
+    }
+
+    public void getConfig() {
+        Properties properties = new Properties();
+        try {
+            properties.load(new FileInputStream("influxdb.properties"));
+            url = properties.getProperty("influxdb/url");
+            username = properties.getProperty("influxdb/username");
+            password = properties.getProperty("influxdb/password");
+        } catch (Exception e) {
+            e.printStackTrace();
+            url = "http://192.168.0.138:8086";
+            username = "root";
+            password = "root";
+        }
+    }
+
     public void init() {
         // Create an object to handle the communication with InfluxDB.
         // (best practice tip: reuse the 'influxDB' instance when possible)
-        final String serverURL = "http://192.168.0.138:8086", username = "root", password = "root";
-        influxDB = InfluxDBFactory.connect(serverURL, username, password);
+        influxDB = InfluxDBFactory.connect(url, username, password);
 
         String databaseName = "epoo_cloud_data";
         influxDB.setDatabase(databaseName);
@@ -114,15 +146,5 @@ public class InfluxDbClient {
         Instant.parse("2007-12-03T10:15:30.00Z");
 
         return columnValues;
-    }
-
-    public static void main(String[] args) throws InterruptedException {
-        InfluxDbClient influxDbClient = new InfluxDbClient();
-        influxDbClient.init();
-
-//        influxDbClient.write();
-        influxDbClient.read();
-
-        influxDbClient.close();
     }
 }
